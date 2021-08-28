@@ -15,15 +15,19 @@
 % New final ?
 
 -export([
+	 create_node/6,
 	 create_pods/1,
 	 delete_pods/1,
 	 create_pod/1,
-	 delete_pod/1
+	 delete_pod/1,
+	 delete_pod/2
 	]).
 
 %% ====================================================================
 %% External functions
 %% ====================================================================
+
+
 %% --------------------------------------------------------------------
 %% Function:start
 %% Description: List of test cases 
@@ -54,7 +58,66 @@ delete_pods(N,Acc) ->
 %% Description: List of test cases 
 %% Returns: non
 %% --------------------------------------------------------------------
+create_node(Alias,ClusterId,PodId,NodeName,Dir,Cookie)->
+    Result=case create_node(Alias,NodeName,Cookie) of
+	       {error,Reason}->
+		   {error,Reason};
+	       {ok,Pod}->
+		   HostId=db_host_info:host_id(Alias),
+		   {atomic,ok}=db_kubelet:create(PodId,HostId,ClusterId,Pod,Dir,Pod,Cookie,[]),
+		   rpc:call(Pod,os,cmd,["rm -rf "++Dir],3*1000),
+		   case rpc:call(Pod,file,make_dir,[Dir],5*1000) of
+		       {error,Reason}->
+			   {error,Reason};
+		       {badrpc,Reason}->
+			   {error,[badrpc,Reason,Pod,Alias,?FUNCTION_NAME,?MODULE,?LINE]};
+		       ok->
+			   {ok,Pod}
+		   end
+	   end,
+    Result.
 
+create_node(Alias,NodeName,Cookie)->
+    ssh:start(),
+    Result=case db_host_info:read(Alias) of
+	       []->
+		   {error,[eexists,Alias,?FUNCTION_NAME,?MODULE,?LINE]};
+	       [{Alias,HostId,Ip,SshPort,UId,Pwd}]->
+		   Pod=list_to_atom(NodeName++"@"++HostId),
+		  
+		   true=erlang:set_cookie(Pod,list_to_atom(Cookie)),
+		   true=erlang:set_cookie(node(),list_to_atom(Cookie)),
+		   ok=stop_node(Pod),
+
+		   ErlCmd="erl_call -s "++"-sname "++NodeName++" "++"-c "++Cookie,
+		   SshCmd="nohup "++ErlCmd++" &",
+		   ErlcCmdResult=rpc:call(node(),my_ssh,ssh_send,[Ip,SshPort,UId,Pwd,SshCmd,2*5000],3*5000),
+		   case node_started(Pod) of
+		       false->
+			   {error,['failed to start', Pod,Alias,?FUNCTION_NAME,?MODULE,?LINE]};
+		       true->
+			   {ok,Pod}
+		   end
+	   end,
+    Result.
+    
+stop_node(Pod)->
+    rpc:call(Pod,init,stop,[],5*1000),		   
+    Result=case node_stopped(Pod) of
+	       false->
+		   {error,["node not stopped",Pod,?FUNCTION_NAME,?MODULE,?LINE]};
+	       true->
+		   db_kubelet:delete(Pod),
+		   ok
+	   end,
+    Result.
+
+   
+%% --------------------------------------------------------------------
+%% Function:start
+%% Description: List of test cases 
+%% Returns: non
+%% --------------------------------------------------------------------
 create_pod(PodId)->
     ok=delete_pod(PodId),
     {ok,HostId}=inet:gethostname(),
@@ -94,6 +157,12 @@ create_pod(PodId)->
 		   end
 	   end,
     Result.
+%% --------------------------------------------------------------------
+%% Function:start
+%% Description: List of test cases 
+%% Returns: non
+%% --------------------------------------------------------------------
+
 delete_pod(Id)->
     {ok,HostId}=inet:gethostname(),
     {ok,ClusterId_X}=application:get_env(cluster_id),
@@ -149,6 +218,12 @@ check_started(N,Vm,SleepTime,_Result)->
 		       false
 	      end,
     check_started(N-1,Vm,SleepTime,NewResult).
+
+%% --------------------------------------------------------------------
+%% Function:start
+%% Description: List of test cases 
+%% Returns: non
+%% --------------------------------------------------------------------
 
 node_stopped(Node)->
     check_stopped(100,Node,50,false).
