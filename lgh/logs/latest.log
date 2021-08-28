@@ -1,0 +1,25 @@
+{{2021,8,28},
+ {14,43,54},
+ 'pod_lgh@joq62-X550CA',log,"Successful starting of server",
+ [kubelet_server]}.
+{{2021,8,28},
+ {14,43,55},
+ 'pod_lgh@joq62-X550CA',debug,"ActivePods",
+ [['lgh_joq62-X550CA_1@joq62-X550CA','lgh_joq62-X550CA_2@joq62-X550CA'],
+  init,kubelet_server,86]}.
+{{2021,8,28},
+ {14,44,1},
+ 'pod_lgh@joq62-X550CA',debug,"App,Pod",
+ [mymath,'lgh_joq62-X550CA_3@joq62-X550CA',start,container,73]}.
+{{2021,8,28},
+ {14,44,2},
+ 'pod_lgh@joq62-X550CA',debug,"App,Pod",
+ [support,'lgh_joq62-X550CA_5@joq62-X550CA',start,container,73]}.
+{{2021,8,28},
+ {14,44,17},
+ 'pod_lgh@joq62-X550CA',debug,"ErlcCmdResult",
+ [ok,create_node,pod,78]}.
+{{2021,8,28},
+ {14,44,18},
+ 'pod_lgh@joq62-X550CA',debug,"App,Pod",
+ [mymath,ssh_node_1@c0,start,container,73]}.

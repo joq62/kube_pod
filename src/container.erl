@@ -16,7 +16,7 @@
 
 -export([
 	 load_start/3,
-	 stop_unload/2
+	 stop_unload/3
 	]).
 
 %% ====================================================================
@@ -87,14 +87,14 @@ start(AppId,Pod)->
 %% Description: List of test cases 
 %% Returns: non
 %% --------------------------------------------------------------------
-stop_unload(Pod,{AppId,AppVsn,GitPath,AppEnv})->
-    Dir=db_kubelet:dir(Pod),
+stop_unload(Pod,{AppId,_AppVsn,_GitPath,_AppEnv},Dir)->
     AppDir=filename:join(Dir,AppId),
     App=list_to_atom(AppId),
     rpc:call(Pod,application,stop,[App],5*1000),
     rpc:call(Pod,application,unload,[App],5*1000),
     rpc:call(Pod,os,cmd,["rm -rf "++AppDir],3*1000),
-    {atomic,ok}=db_kubelet:delete_container(Pod,{AppId,AppVsn,GitPath,AppEnv}),
+    rpc:call(Pod,code,del_path,[filename:join([AppDir,"ebin"])],5*1000),
+    
     ok.
     
 %% --------------------------------------------------------------------

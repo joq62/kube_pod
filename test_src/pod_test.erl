@@ -199,21 +199,16 @@ stop_node(Pod,Container,Dir)->
    % [rpc:call(Pod,application,stop,[list_to_atom(AppId)],5*1000)||AppId<-AppIds],
   %  [{rpc:call(Pod,application,unload,[list_to_atom(AppId)],5*1000),
   %    rpc:call(Pod,code,del_path,[filename:join([Dir,AppId,"ebin"])],5*1000)}||AppId<-AppIds],
-     
-    Result=case rpc:call(Pod,os,cmd,["rm -rf "++Dir],3*1000) of
-	       {badrpc,Reason}->
-		   {error,[badrpc,Reason,Pod,Dir,?FUNCTION_NAME,?MODULE,?LINE]};
-	       _->
-		   case pod:stop_node(Pod) of
-		       {error,Reason}->
-			   {error,Reason};
-		       ok ->
-			   case db_kubelet:delete_container(Pod,Container) of
-			       {atomic,ok}->
-				   ok;
-			       Reason->
-				   {error,[Reason,Pod,Container,Dir,?FUNCTION_NAME,?MODULE,?LINE]}			       
-			   end
+    ok= container:stop_unload(Pod,Container,Dir),
+    Result=case pod:stop_node(Pod) of
+	       {error,Reason}->
+		   {error,Reason};
+	       ok ->
+		   case db_kubelet:delete_container(Pod,Container) of
+		       {atomic,ok}->
+			   ok;
+		       Reason->
+			   {error,[Reason,Pod,Container,Dir,?FUNCTION_NAME,?MODULE,?LINE]}			       
 		   end
 	   end,
     Result.
