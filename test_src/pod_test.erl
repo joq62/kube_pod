@@ -106,7 +106,7 @@ pass_1()->
     
     io:format("1. sd:all() ~p~n",[{sd:all(),?MODULE,?LINE}]),
     
-    StopList=[container:stop_unload(Pod,Container)||{ok,Pod,Container}<-StartResult],
+    StopList=[stop_node(Pod,Container,Dir)||{ok,Pod,Container,Dir}<-StartResult],
     io:format("2. sd:all() ~p~n",[{sd:all(),?MODULE,?LINE}]),
     ok.
 
@@ -115,9 +115,13 @@ start_container(Container)->
     NumPods=lists:flatlength(Pods),
     N=rand:uniform(NumPods),
     WorkerPod=lists:nth(N,Pods),
-    R=container:load_start(WorkerPod,Container).
+    Dir=db_kubelet:dir(WorkerPod),
+    R=container:load_start(WorkerPod,Container,Dir),
+    {R,WorkerPod,Container,Dir}.
+    
 
 
+			   
 %% --------------------------------------------------------------------
 %% Function:start/0 
 %% Description: Initiate the eunit tests, set upp needed processes etc
@@ -132,7 +136,7 @@ pass_2()->
     Cookie="ssh_node_1_cookie",
   
     % Create a node
-    {ok,Pod}=pod:create_node(Alias,ClusterId,PodId,NodeName,Dir,Cookie),
+    {ok,Pod}=create_node(Alias,ClusterId,PodId,NodeName,Dir,Cookie),
     Date=date(),
     Date=rpc:call(Pod,erlang,date,[],3*1000),
     io:format("1. ls ~p~n",[{rpc:call(Pod,file,list_dir,["."],3*1000),?MODULE,?LINE}]),
@@ -140,12 +144,14 @@ pass_2()->
     % load _Start pod
     PodName="mymath",
     Containers=db_pod_spec:containers(PodName),
-    AppStartResult=[container:load_start(Pod,Container)||Container<-Containers],
+    AppStartResult=[load_start(Pod,Container,Dir)||Container<-Containers],
     io:format(" sd:get(mymath)  ~p~n",[{sd:get(mymath),?MODULE,?LINE}]),
     [Mymath|_]=sd:get(mymath),
     42=sd_call(mymath,mymath,add,[20,22],3*1000),
 
-    ok=pod:delete_pod(Pod,PodId),
+    
+    StopResult=[stop_node(Pod,Container,Dir)||Container<-Containers],
+    io:format(" StopResult ~p~n",[{StopResult,?MODULE,?LINE}]),
     {badrpc,_}=rpc:call(Pod,erlang,date,[],3*1000),
     io:format(" sd:get(mymath)  ~p~n",[{sd:get(mymath),?MODULE,?LINE}]),
     {error,_}=sd_call(mymath,mymath,add,[20,22],3*1000),
@@ -159,7 +165,74 @@ sd_call(App,M,F,A,TimeOut)->
 		   rpc:call(Node,M,F,A,TimeOut)
 	   end,
     Result.
-	    
+
+create_node(Alias,ClusterId,PodId,NodeName,Dir,Cookie)->
+    Result=case pod:create_node(Alias,NodeName,Cookie) of
+	       {error,Reason}->
+		   {error,Reason};
+	       {ok,Pod}->
+		   HostId=db_host_info:host_id(Alias),
+		   {atomic,ok}=db_kubelet:create(PodId,HostId,ClusterId,Pod,Dir,Pod,Cookie,[]),
+		   rpc:call(Pod,os,cmd,["rm -rf "++Dir],3*1000),
+		   case rpc:call(Pod,file,make_dir,[Dir],5*1000) of
+		       {error,Reason}->
+			   {error,Reason};
+		       {badrpc,Reason}->
+			   {error,[badrpc,Reason,Pod,Alias,?FUNCTION_NAME,?MODULE,?LINE]};
+		       ok->
+			   case db_kubelet:create(PodId,HostId,ClusterId,Pod,Dir,na,Cookie,[]) of
+			       {atomic,ok}->
+				   {ok,Pod};
+			       Error ->
+				   {error,[Error,PodId,HostId,ClusterId,Pod,Dir,na,Cookie,[],?FUNCTION_NAME,?MODULE,?LINE]}
+			   end
+		   end
+	   end,
+    Result.
+stop_node(Pod,Container,Dir)->
+    {AppId,_Vsn,_GitPath,_Env}=Container,
+   % AppIds=[AppId||{AppId,_Vsn,_GitPath,_Env}<-Containers],
+    rpc:call(Pod,application,stop,[list_to_atom(AppId)],5*1000),
+    rpc:call(Pod,application,unload,[list_to_atom(AppId)],5*1000),
+    rpc:call(Pod,code,del_path,[filename:join([Dir,AppId,"ebin"])],5*1000),
+        
+   % [rpc:call(Pod,application,stop,[list_to_atom(AppId)],5*1000)||AppId<-AppIds],
+  %  [{rpc:call(Pod,application,unload,[list_to_atom(AppId)],5*1000),
+  %    rpc:call(Pod,code,del_path,[filename:join([Dir,AppId,"ebin"])],5*1000)}||AppId<-AppIds],
+     
+    Result=case rpc:call(Pod,os,cmd,["rm -rf "++Dir],3*1000) of
+	       {badrpc,Reason}->
+		   {error,[badrpc,Reason,Pod,Dir,?FUNCTION_NAME,?MODULE,?LINE]};
+	       _->
+		   case pod:stop_node(Pod) of
+		       {error,Reason}->
+			   {error,Reason};
+		       ok ->
+			   case db_kubelet:delete_container(Pod,Container) of
+			       {atomic,ok}->
+				   ok;
+			       Reason->
+				   {error,[Reason,Pod,Container,Dir,?FUNCTION_NAME,?MODULE,?LINE]}			       
+			   end
+		   end
+	   end,
+    Result.
+
+
+		   
+load_start(Pod,Container,Dir)->
+    Result=case container:load_start(Pod,Container,Dir) of
+	       {error,Reason}->
+		   {error,Reason};
+	       ok->
+		   case db_kubelet:add_container(Pod,Container) of
+		       {atomic,ok}->
+			   ok;
+		       {Error,Reason}->
+			   {Error,[Reason,Pod,Container,?FUNCTION_NAME,?MODULE,?LINE]}
+		   end
+	   end,
+    Result.	    
 %% --------------------------------------------------------------------
 %% Function:start/0 
 %% Description: Initiate the eunit tests, set upp needed processes etc

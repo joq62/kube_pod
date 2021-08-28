@@ -15,7 +15,7 @@
 % New final ?
 
 -export([
-	 load_start/2,
+	 load_start/3,
 	 stop_unload/2
 	]).
 
@@ -26,11 +26,10 @@
 %% Function:start
 %% Description: List of test cases 
 %% Returns: non
-%% --------------------------------------------------------------------
+%% -------------------------------------------------------------------
 
 
-load_start(WorkerPod,{AppId,AppVsn,GitPath,AppEnv})->
-    Dir=db_kubelet:dir(WorkerPod),
+load_start(WorkerPod,{AppId,AppVsn,GitPath,AppEnv},Dir)->
     Result=case load(AppId,AppVsn,GitPath,AppEnv,WorkerPod,Dir) of
 	       {error,Reason}->
 		   {error,Reason};
@@ -39,8 +38,7 @@ load_start(WorkerPod,{AppId,AppVsn,GitPath,AppEnv})->
 		       {error,Reason}->
 			   {error,Reason};
 		       ok->
-			   {atomic,ok}=db_kubelet:add_container(WorkerPod,{AppId,AppVsn,GitPath,AppEnv}),
-			   {ok,WorkerPod,{AppId,AppVsn,GitPath,AppEnv}}
+			   ok
 		   end
 	   end,
     Result.

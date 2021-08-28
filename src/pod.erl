@@ -15,7 +15,9 @@
 % New final ?
 
 -export([
-	 create_node/6,
+	 create_node/3,
+	 stop_node/1,
+
 	 create_pods/1,
 	 delete_pods/1,
 	 create_pod/1,
@@ -58,25 +60,6 @@ delete_pods(N,Acc) ->
 %% Description: List of test cases 
 %% Returns: non
 %% --------------------------------------------------------------------
-create_node(Alias,ClusterId,PodId,NodeName,Dir,Cookie)->
-    Result=case create_node(Alias,NodeName,Cookie) of
-	       {error,Reason}->
-		   {error,Reason};
-	       {ok,Pod}->
-		   HostId=db_host_info:host_id(Alias),
-		   {atomic,ok}=db_kubelet:create(PodId,HostId,ClusterId,Pod,Dir,Pod,Cookie,[]),
-		   rpc:call(Pod,os,cmd,["rm -rf "++Dir],3*1000),
-		   case rpc:call(Pod,file,make_dir,[Dir],5*1000) of
-		       {error,Reason}->
-			   {error,Reason};
-		       {badrpc,Reason}->
-			   {error,[badrpc,Reason,Pod,Alias,?FUNCTION_NAME,?MODULE,?LINE]};
-		       ok->
-			   {ok,Pod}
-		   end
-	   end,
-    Result.
-
 create_node(Alias,NodeName,Cookie)->
     ssh:start(),
     Result=case db_host_info:read(Alias) of
@@ -92,6 +75,7 @@ create_node(Alias,NodeName,Cookie)->
 		   ErlCmd="erl_call -s "++"-sname "++NodeName++" "++"-c "++Cookie,
 		   SshCmd="nohup "++ErlCmd++" &",
 		   ErlcCmdResult=rpc:call(node(),my_ssh,ssh_send,[Ip,SshPort,UId,Pwd,SshCmd,2*5000],3*5000),
+		   ?PrintLog(debug,"ErlcCmdResult",[ErlcCmdResult,?FUNCTION_NAME,?MODULE,?LINE]),
 		   case node_started(Pod) of
 		       false->
 			   {error,['failed to start', Pod,Alias,?FUNCTION_NAME,?MODULE,?LINE]};
@@ -107,7 +91,6 @@ stop_node(Pod)->
 	       false->
 		   {error,["node not stopped",Pod,?FUNCTION_NAME,?MODULE,?LINE]};
 	       true->
-		   db_kubelet:delete(Pod),
 		   ok
 	   end,
     Result.
