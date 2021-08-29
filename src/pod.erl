@@ -121,6 +121,8 @@ create_pod(PodId)->
 		   ?PrintLog(ticket,"Failed to start  ",[PodId,Pod,Dir,NodeName,ErlCmd,?FUNCTION_NAME,?MODULE,?LINE]),
 		   {error,[not_started,Pod,ErlCmdResult,?FUNCTION_NAME,?MODULE,?LINE]};
 	       true ->
+		   os:cmd("rm -rf "++Dir),
+		   timer:sleep(200),
 		   case file:make_dir(Dir) of
 		       {error,Reason}->
 			   ?PrintLog(ticket,"Failed make dir ",[Reason,PodId,Pod,Dir,NodeName,ErlCmd,?FUNCTION_NAME,?MODULE,?LINE]),
