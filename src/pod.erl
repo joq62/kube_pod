@@ -104,13 +104,7 @@ stop_node(Pod)->
 create_pod(PodId)->
     ok=delete_pod(PodId),
     {ok,HostId}=inet:gethostname(),
-    {ok,ClusterId_X}=application:get_env(cluster_id),
-    ClusterId=case is_atom(ClusterId_X) of
-		  true->
-		      atom_to_list(ClusterId_X);
-		  false->
-		      ClusterId_X
-	      end,
+    ClusterId=sd:call(etcd,db_cluster_info,cluster,[],4*1000),
     Cookie=atom_to_list(erlang:get_cookie()),
     NodeName=ClusterId++"_"++HostId++"_"++PodId,
     Pod=list_to_atom(NodeName++"@"++HostId),
@@ -130,11 +124,11 @@ create_pod(PodId)->
 		       {error,Reason}->
 			   {error,[Reason,Pod,Dir,?FUNCTION_NAME,?MODULE,?LINE]};
 		       ok->
-			   case db_kubelet:member(PodId,HostId,ClusterId) of
+			   case sd:call(etcd,db_kubelet,member,[PodId,HostId,ClusterId],3*1000) of
 				       true->
 					   {error,['already exists',PodId,HostId,ClusterId,?FUNCTION_NAME,?MODULE,?LINE]};
 				       false->
-					   {atomic,ok}=db_kubelet:create(PodId,HostId,ClusterId,Pod,Dir,node(),Cookie,[]),
+					   {atomic,ok}=sd:call(etcd,db_kubelet,create,[PodId,HostId,ClusterId,Pod,Dir,node(),Cookie,[]],5*1000),
 					   {ok,Pod}
 				   end
 		   end
@@ -152,7 +146,15 @@ delete_pod(Id)->
     NodeName=ClusterId++"_"++HostId++"_"++Id,
     Pod=list_to_atom(NodeName++"@"++HostId),
     Dir=Id++"."++ClusterId,
-    delete_pod(Pod,Dir).
+    Result=case sd:call(etcd,db_kubelet,member,[Id,HostId,ClusterId],5*1000) of
+	       false->
+		   ok;
+	       true->
+		   delete_pod(Pod,Dir);
+	       Reason ->
+		   {error,[Reason,Id,HostId,ClusterId,?FUNCTION_NAME,?MODULE,?LINE]}
+	   end,
+    Result.
 
 delete_pod(Pod,Dir)->
     rpc:call(Pod,os,cmd,["rm -rf "++Dir],5*1000),
@@ -161,7 +163,7 @@ delete_pod(Pod,Dir)->
 	       false->
 		   {error,["node not stopped",Pod,?FUNCTION_NAME,?MODULE,?LINE]};
 	       true->
-		   db_kubelet:delete(Pod),
+		   {atomic,ok}=sd:call(etcd,db_kubelet,delete,[Pod],5*1000),
 		   ok
 	   end,
     Result.

@@ -29,7 +29,7 @@ unit_test:
 	erlc -I ../interfaces -o lgh_ebin ../node/src/*.erl;
 	erlc -I ../interfaces -o lgh_ebin ../applications/kubelet/src/*.erl;
 #	kube_pod
-	erlc -I ../interfaces -o lgh_ebin 	../kube_pod/src/*.erl;
+	erlc -I ../interfaces -o lgh_ebin src/*.erl;
 #	test application
 	cp test_src/*.app test_ebin;
 	erlc -I ../interfaces -o test_ebin test_src/*.erl;
