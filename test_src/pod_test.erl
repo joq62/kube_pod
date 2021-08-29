@@ -90,16 +90,11 @@ pass_0()->
 %% Returns: non
 %% --------------------------------------------------------------------
 pass_1()->
-       {ok,ClusterId_X}=application:get_env(cluster_id),
-    ClusterId=case is_atom(ClusterId_X) of
-		  true->
-		      atom_to_list(ClusterId_X);
-		  false->
-		      ClusterId_X
-	      end,
+    ClusterId=sd:call(etcd,db_cluster_info,cluster,[],3*1000),
     PodsList=[Pods||{_DeploymentId,_Vsn,Pods,_ClusterId}<-db_deployment_spec:key_cluster_id(ClusterId)],
     ContainersList=[db_pod_spec:containers(PodId)||[{PodId,_Vsn,_Num}]<-PodsList],
     ContainersToStart=lists:append(ContainersList),
+
     StartResult=[start_container(Container)||Container<-ContainersToStart],
     
     io:format(" StartResult ~p~n",[{StartResult,?MODULE,?LINE}]),
@@ -111,6 +106,7 @@ pass_1()->
     ok.
 
 start_container(Container)->
+    io:format(" Container ~p~n",[{Container,?FUNCTION_NAME,?MODULE,?LINE}]),
     Pods=nodes(),
     NumPods=lists:flatlength(Pods),
     N=rand:uniform(NumPods),

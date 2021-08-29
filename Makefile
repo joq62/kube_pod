@@ -3,6 +3,7 @@ all:
 	rm -rf ebin *_ebin lgh *.lgh;
 	mkdir ebin;
 	erlc -I ../interfaces -o ebin src/*.erl;
+	erlc -I ../interfaces -o ebin ../kube_pod/src/*.erl;
 	rm -rf ebin src/*.beam *.beam  test_src/*.beam test_ebin;
 	rm -rf  *~ */*~  erl_cra*;
 	rm -rf *_specs *_config *.log;
@@ -27,8 +28,8 @@ unit_test:
 	cp ../applications/kubelet/src/*.app lgh_ebin;
 	erlc -I ../interfaces -o lgh_ebin ../node/src/*.erl;
 	erlc -I ../interfaces -o lgh_ebin ../applications/kubelet/src/*.erl;
-#	pod
-	erlc -I ../interfaces -o lgh_ebin src/*.erl;
+#	kube_pod
+	erlc -I ../interfaces -o lgh_ebin 	../kube_pod/src/*.erl;
 #	test application
 	cp test_src/*.app test_ebin;
 	erlc -I ../interfaces -o test_ebin test_src/*.erl;
@@ -37,5 +38,5 @@ unit_test:
 	    -sname pod_lgh\
 	    -unit_test monitor_node pod_lgh\
 	    -unit_test cluster_id lgh\
-	    -unit_test start_host_id c0_lgh\
+	    -unit_test cookie lgh_cookie\
 	    -run unit_test start_test test_src/test.config

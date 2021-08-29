@@ -148,13 +148,7 @@ create_pod(PodId)->
 
 delete_pod(Id)->
     {ok,HostId}=inet:gethostname(),
-    {ok,ClusterId_X}=application:get_env(cluster_id),
-    ClusterId=case is_atom(ClusterId_X) of
-		  true->
-		      atom_to_list(ClusterId_X);
-		  false->
-		      ClusterId_X
-	      end,
+    ClusterId=sd:call(etcd,db_cluster_info,cluster,[],5*1000),
     NodeName=ClusterId++"_"++HostId++"_"++Id,
     Pod=list_to_atom(NodeName++"@"++HostId),
     Dir=Id++"."++ClusterId,
