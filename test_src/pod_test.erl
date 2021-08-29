@@ -35,13 +35,13 @@ start()->
     ok=pass_0(),
     io:format("~p~n",[{"Stop pass_0()",?MODULE,?FUNCTION_NAME,?LINE}]),
 
-    io:format("~p~n",[{"Start pass_1()",?MODULE,?FUNCTION_NAME,?LINE}]),
-    ok=pass_1(),
-    io:format("~p~n",[{"Stop pass_1()",?MODULE,?FUNCTION_NAME,?LINE}]),
+  %  io:format("~p~n",[{"Start pass_1()",?MODULE,?FUNCTION_NAME,?LINE}]),
+  %  ok=pass_1(),
+  %  io:format("~p~n",[{"Stop pass_1()",?MODULE,?FUNCTION_NAME,?LINE}]),
 
-    io:format("~p~n",[{"Start pass_2()",?MODULE,?FUNCTION_NAME,?LINE}]),
-    ok=pass_2(),
-    io:format("~p~n",[{"Stop pass_2()",?MODULE,?FUNCTION_NAME,?LINE}]),
+ %   io:format("~p~n",[{"Start pass_2()",?MODULE,?FUNCTION_NAME,?LINE}]),
+ %   ok=pass_2(),
+  %  io:format("~p~n",[{"Stop pass_2()",?MODULE,?FUNCTION_NAME,?LINE}]),
 
 %    io:format("~p~n",[{"Start pass_3()",?MODULE,?FUNCTION_NAME,?LINE}]),
 %    ok=pass_3(),
@@ -72,16 +72,7 @@ start()->
 %% Returns: non
 %% --------------------------------------------------------------------
 pass_0()->
-    {ok,ClusterId_X}=application:get_env(cluster_id),
-    ClusterId=case is_atom(ClusterId_X) of
-		  true->
-		      atom_to_list(ClusterId_X);
-		  false->
-		      ClusterId_X
-	      end,
-    CreatedPods=pod:create_pods(5),
-    io:format(" CreatedPods ~p~n",[{CreatedPods,?MODULE,?LINE}]),
-    
+     
     ok.
 
 %% --------------------------------------------------------------------
@@ -90,32 +81,7 @@ pass_0()->
 %% Returns: non
 %% --------------------------------------------------------------------
 pass_1()->
-    ClusterId=sd:call(etcd,db_cluster_info,cluster,[],3*1000),
-    PodsList=[Pods||{_DeploymentId,_Vsn,Pods,_ClusterId}<-db_deployment_spec:key_cluster_id(ClusterId)],
-    ContainersList=[db_pod_spec:containers(PodId)||[{PodId,_Vsn,_Num}]<-PodsList],
-    ContainersToStart=lists:append(ContainersList),
-
-    StartResult=[start_container(Container)||Container<-ContainersToStart],
-    
-    io:format(" StartResult ~p~n",[{StartResult,?MODULE,?LINE}]),
-    
-    io:format("1. sd:all() ~p~n",[{sd:all(),?MODULE,?LINE}]),
-    
-    StopList=[stop_node(Pod,Container,Dir)||{ok,Pod,Container,Dir}<-StartResult],
-    io:format("2. sd:all() ~p~n",[{sd:all(),?MODULE,?LINE}]),
-    ok.
-
-start_container(Container)->
-    io:format(" Container ~p~n",[{Container,?FUNCTION_NAME,?MODULE,?LINE}]),
-    Pods=nodes(),
-    NumPods=lists:flatlength(Pods),
-    N=rand:uniform(NumPods),
-    WorkerPod=lists:nth(N,Pods),
-    Dir=db_kubelet:dir(WorkerPod),
-    R=container:load_start(WorkerPod,Container,Dir),
-    {R,WorkerPod,Container,Dir}.
-    
-
+  ok.
 
 			   
 %% --------------------------------------------------------------------

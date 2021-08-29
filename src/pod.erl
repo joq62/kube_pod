@@ -62,8 +62,9 @@ delete_pods(N,Acc) ->
 %% --------------------------------------------------------------------
 create_node(Alias,NodeName,Cookie)->
     ssh:start(),
-    Result=case db_host_info:read(Alias) of
+    Result=case sd:call(etcd,db_host_info,read,[Alias],4*1000) of
 	       []->
+		   ?PrintLog(ticket,"eexists ",[Alias,NodeName,?FUNCTION_NAME,?MODULE,?LINE]),
 		   {error,[eexists,Alias,?FUNCTION_NAME,?MODULE,?LINE]};
 	       [{Alias,HostId,Ip,SshPort,UId,Pwd}]->
 		   Pod=list_to_atom(NodeName++"@"++HostId),
@@ -75,11 +76,12 @@ create_node(Alias,NodeName,Cookie)->
 		   ErlCmd="erl_call -s "++"-sname "++NodeName++" "++"-c "++Cookie,
 		   SshCmd="nohup "++ErlCmd++" &",
 		   ErlcCmdResult=rpc:call(node(),my_ssh,ssh_send,[Ip,SshPort,UId,Pwd,SshCmd,2*5000],3*5000),
-		   ?PrintLog(debug,"ErlcCmdResult",[ErlcCmdResult,?FUNCTION_NAME,?MODULE,?LINE]),
 		   case node_started(Pod) of
 		       false->
-			   {error,['failed to start', Pod,Alias,?FUNCTION_NAME,?MODULE,?LINE]};
+			   ?PrintLog(ticket,"Failed ",[Pod,Alias,NodeName,ErlcCmdResult,?FUNCTION_NAME,?MODULE,?LINE]),
+			   {error,['failed to start', Pod,Alias,ErlcCmdResult,?FUNCTION_NAME,?MODULE,?LINE]};
 		       true->
+			   ?PrintLog(log,"Started ",[Pod,Alias,NodeName,ErlcCmdResult,?FUNCTION_NAME,?MODULE,?LINE]),
 			   {ok,Pod}
 		   end
 	   end,
@@ -89,8 +91,10 @@ stop_node(Pod)->
     rpc:call(Pod,init,stop,[],5*1000),		   
     Result=case node_stopped(Pod) of
 	       false->
+		   ?PrintLog(ticket,"Failed to stop node ",[Pod,?FUNCTION_NAME,?MODULE,?LINE]),
 		   {error,["node not stopped",Pod,?FUNCTION_NAME,?MODULE,?LINE]};
 	       true->
+		   ?PrintLog(log,"Stopped ",[Pod,?FUNCTION_NAME,?MODULE,?LINE]),
 		   ok
 	   end,
     Result.
@@ -109,28 +113,33 @@ create_pod(PodId)->
     NodeName=ClusterId++"_"++HostId++"_"++PodId,
     Pod=list_to_atom(NodeName++"@"++HostId),
     Dir=PodId++"."++ClusterId,
-    
-    %ok=delete_pod(Pod,Dir),
-
     ErlCallArgs="-c "++Cookie++" "++"-sname "++NodeName,
     ErlCmd="erl_call -s "++ErlCallArgs, 
     ErlCmdResult=os:cmd(ErlCmd),
     Result=case node_started(Pod) of
 	       false->
+		   ?PrintLog(ticket,"Failed to start  ",[PodId,Pod,Dir,NodeName,ErlCmd,?FUNCTION_NAME,?MODULE,?LINE]),
 		   {error,[not_started,Pod,ErlCmdResult,?FUNCTION_NAME,?MODULE,?LINE]};
 	       true ->
-		  
 		   case file:make_dir(Dir) of
 		       {error,Reason}->
+			   ?PrintLog(ticket,"Failed make dir ",[Reason,PodId,Pod,Dir,NodeName,ErlCmd,?FUNCTION_NAME,?MODULE,?LINE]),
 			   {error,[Reason,Pod,Dir,?FUNCTION_NAME,?MODULE,?LINE]};
 		       ok->
 			   case sd:call(etcd,db_kubelet,member,[PodId,HostId,ClusterId],3*1000) of
-				       true->
-					   {error,['already exists',PodId,HostId,ClusterId,?FUNCTION_NAME,?MODULE,?LINE]};
-				       false->
-					   {atomic,ok}=sd:call(etcd,db_kubelet,create,[PodId,HostId,ClusterId,Pod,Dir,node(),Cookie,[]],5*1000),
-					   {ok,Pod}
+			       true->
+				   ?PrintLog(ticket,"Already exists ",[PodId,HostId,ClusterId,?FUNCTION_NAME,?MODULE,?LINE]),
+				   {error,['already exists',PodId,HostId,ClusterId,?FUNCTION_NAME,?MODULE,?LINE]};
+			       false->
+				   case sd:call(etcd,db_kubelet,create,[PodId,HostId,ClusterId,Pod,Dir,node(),Cookie,[]],5*1000) of
+				       {atomic,ok}->
+					   ?PrintLog(log,"Started ",[PodId,Pod,HostId,ClusterId,Pod,Dir,?FUNCTION_NAME,?MODULE,?LINE]),
+					   {ok,Pod};
+				       Reason ->
+					   ?PrintLog(ticket,"Failed ",[Reason,PodId,HostId,ClusterId,?FUNCTION_NAME,?MODULE,?LINE]),
+					   {error,[Reason,PodId,HostId,ClusterId,?FUNCTION_NAME,?MODULE,?LINE]}
 				   end
+			   end
 		   end
 	   end,
     Result.
@@ -152,6 +161,7 @@ delete_pod(Id)->
 	       true->
 		   delete_pod(Pod,Dir);
 	       Reason ->
+		   ?PrintLog(ticket,"Failed ",[Reason,Id,HostId,ClusterId,?FUNCTION_NAME,?MODULE,?LINE]),
 		   {error,[Reason,Id,HostId,ClusterId,?FUNCTION_NAME,?MODULE,?LINE]}
 	   end,
     Result.
@@ -163,8 +173,14 @@ delete_pod(Pod,Dir)->
 	       false->
 		   {error,["node not stopped",Pod,?FUNCTION_NAME,?MODULE,?LINE]};
 	       true->
-		   {atomic,ok}=sd:call(etcd,db_kubelet,delete,[Pod],5*1000),
-		   ok
+		   case sd:call(etcd,db_kubelet,delete,[Pod],5*1000) of
+		       {atomic,ok}->
+			   ?PrintLog(log,"Deleted ",[Pod,Dir,?FUNCTION_NAME,?MODULE,?LINE]),
+			   ok;
+		       Reason ->
+			   ?PrintLog(ticket,"Failed ",[Reason,Pod,Dir,?FUNCTION_NAME,?MODULE,?LINE]),
+			   {error,[Reason,Pod,Dir,?FUNCTION_NAME,?MODULE,?LINE]}
+		   end
 	   end,
     Result.
 

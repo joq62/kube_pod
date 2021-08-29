@@ -34,6 +34,7 @@ load_start(WorkerPod,{AppId,AppVsn,GitPath,AppEnv},Dir)->
 	       {error,Reason}->
 		   {error,Reason};
 	       ok ->
+		   ?PrintLog(log,"Loaded  ",[WorkerPod,AppId,Dir,?FUNCTION_NAME,?MODULE,?LINE]),
 		   case start(AppId,WorkerPod) of
 		       {error,Reason}->
 			   {error,Reason};
@@ -46,11 +47,12 @@ load_start(WorkerPod,{AppId,AppVsn,GitPath,AppEnv},Dir)->
 load(AppId,_AppVsn,GitPath,AppEnv,Pod,Dir)->
     Result = case rpc:call(Pod,application,which_applications,[],5*1000) of
 		 {badrpc,Reason}->
+		     ?PrintLog(ticket,"badrpc ",[Reason,Pod,AppId,?FUNCTION_NAME,?MODULE,?LINE]),
 		     {error,[badrpc,Reason,?FUNCTION_NAME,?MODULE,?LINE]};
 		 LoadedApps->
 		     case lists:keymember(list_to_atom(AppId),1,LoadedApps) of
 			 true->
-			     ?PrintLog(log,'Already loaded',[AppId,Pod,?FUNCTION_NAME,?MODULE,?LINE]),
+			     ?PrintLog(ticket,'Already loaded',[AppId,Pod,?FUNCTION_NAME,?MODULE,?LINE]),
 			     {error,['Already loaded',AppId,Pod]};
 			 false ->
 			     AppDir=filename:join(Dir,AppId),
@@ -73,10 +75,13 @@ start(AppId,Pod)->
     ?PrintLog(debug,"App,Pod",[App,Pod,?FUNCTION_NAME,?MODULE,?LINE]),
     Result=case rpc:call(Pod,application,start,[App],2*60*1000) of
 	       ok->
+		   ?PrintLog(log,"Started ",[AppId,Pod,?FUNCTION_NAME,?MODULE,?LINE]),
 		   ok;
 	       {error,{already_started}}->
+		   ?PrintLog(ticket,"already_started ",[AppId,Pod,?FUNCTION_NAME,?MODULE,?LINE]),
 		   ok;
 	       {Error,Reason}->
+		   ?PrintLog(ticket,"Failed ",[Error,Reason,AppId,Pod,?FUNCTION_NAME,?MODULE,?LINE]),
 		   {Error,[Reason,application,Pod,start,App,?FUNCTION_NAME,?MODULE,?LINE]}
 	   end,
     Result.
@@ -94,7 +99,7 @@ stop_unload(Pod,{AppId,_AppVsn,_GitPath,_AppEnv},Dir)->
     rpc:call(Pod,application,unload,[App],5*1000),
     rpc:call(Pod,os,cmd,["rm -rf "++AppDir],3*1000),
     rpc:call(Pod,code,del_path,[filename:join([AppDir,"ebin"])],5*1000),
-    
+    ?PrintLog(log,"Stopped ",[AppId,Pod,?FUNCTION_NAME,?MODULE,?LINE]),
     ok.
     
 %% --------------------------------------------------------------------
